@@ -147,7 +147,7 @@ def check_frames_likelihood(video_list, coord_list, conf_threshold, n_bp, savepa
         if i == 0:            
             colnames = df.columns.get_level_values(1).unique().tolist()
             bp_list = colnames[:n_bp]
-            cols = ['Filename','FPS','Frame_on','Frame_off','confidence_thre']
+            cols = ['Filename','FPS','Height','Width','Frame_on','Frame_off','confidence_thre']
             
             for ii in range(n_bp):
                            cols.append(bp_list[ii] + '_lowconf_nframes')
@@ -166,8 +166,8 @@ def check_frames_likelihood(video_list, coord_list, conf_threshold, n_bp, savepa
         # ---------------------------------------------------------------------
         cap = cv2.VideoCapture(video_list[i])
         fps = cap.get(cv2.CAP_PROP_FPS)
-        # width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))   # float `width`
-        # height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))   # float `width`
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
         # Get frame onset and offset
@@ -215,6 +215,8 @@ def check_frames_likelihood(video_list, coord_list, conf_threshold, n_bp, savepa
         # ---------------------------------------------------------------------
         video_info.loc[i,'Filename'] = video_list[i]
         video_info.loc[i,'FPS'] = round(fps)
+        video_info.loc[i,'Height'] = height
+        video_info.loc[i,'Width'] = width
         video_info.loc[i,'Frame_on'] = t_onset
         video_info.loc[i,'Frame_off'] = t_offset
         video_info.loc[i,'confidence_thre'] = conf_threshold
@@ -311,7 +313,7 @@ def fix_frames_likelihood(video_list, coord_list, video_info, conf_threshold, bp
     
     id_on = 0 if id_on is None else id_on 
     for i in range(len(coord_list)):
-        print(i)
+        print(f"Video {i}")
         # Load initial inputs
         df = pd.read_hdf(coord_list[i])
         vname = video_list[i]

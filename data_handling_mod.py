@@ -99,7 +99,8 @@ def select_file_video(multiple = True):
     """
     
     # Get the filetypes
-    filetypes = (('MP4', '*.mp4'),('All files', '*.*'))
+    filetypes = (("Video Files", "*.mp4 *.avi *.mov *.mkv *.webm"),
+                ("All Files", "*.*"))
     
     root = Tk()
     root.withdraw() # we don't want a full GUI, so keep the root window from appearing

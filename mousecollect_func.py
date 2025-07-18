@@ -102,7 +102,7 @@ class ClickCollector:
         elif event.button == 3: # Right button: skip
             self.clicks.append((np.nan,np.nan))
             
-        elif event.button == 2 and self.cliques:  # Middle button: undo
+        elif event.button == 2 and self.clicks:  # Middle button: undo
             self.clicks.pop()
             self.ax.clear()            
             self.ax.imshow(self.current_frame)
