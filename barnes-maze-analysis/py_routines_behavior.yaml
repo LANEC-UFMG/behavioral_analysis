@@ -273,3 +273,4 @@ dependencies:
       - opencv-python==4.8.1.78
       - py-cpuinfo==9.0.0
       - tables==3.8.0
+      - openpyxl
