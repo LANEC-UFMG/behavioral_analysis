@@ -93,9 +93,9 @@ def get_trial_onset_offset(df, conf_threshold, fps=30, max_duration_trial=3, n_b
     unique, counts = np.unique(r_mask, return_counts=True)    # Get the number of counts
     
     # Define the trial beginning as the first moment when (80% of the animals bp have high confidence interval)
-    beg = unique[np.where(counts >= round(n_bp*0,8))[0][0]]
+    beg = unique[np.where(counts >= round(n_bp*0.8))[0][0]]
     # Define the trial end as the last moment when (80% of the animals bp have high confidence interval)
-    end = unique[np.where(counts >= round(n_bp*0,8))[0][-1]]
+    end = unique[np.where(counts >= round(n_bp*0.8))[0][-1]]
     
     # Check if the trial lasted more than the max limit defined by the user
     if (end-beg+1)/fps > max_duration_trial*60:
@@ -154,13 +154,9 @@ def check_frames_likelihood(video_list, coord_list, conf_threshold, n_bp, savepa
                            cols.append(bp_list[ii] + '_lowconf_percent')
             
             video_info = pd.DataFrame(data=None,columns = cols, index = range(len(video_list)))
-            # path = video_list[i][0:55]
             
-        if len(video_list[i]) == 65:
-            fname = video_list[i][-18:-4]
-        else:
-            fname = video_list[i][-22:-4]
-        
+        last_slash = video_list[i].rfind('/')
+        fname = video_list[i][last_slash+1:-4]
         # ---------------------------------------------------------------------
         # Load video info   
         # ---------------------------------------------------------------------
@@ -172,8 +168,12 @@ def check_frames_likelihood(video_list, coord_list, conf_threshold, n_bp, savepa
         
         # Get frame onset and offset
         t_onset, t_offset = get_trial_onset_offset(df, conf_threshold, fps=round(fps), max_duration_trial=3, n_bp=n_bp)
+        #t_onset, t_offset = 0 , len(df)-1
+        #t_onset = t_on[i]
+        #t_offset = t_off[i]
+                
         # Array for Onset/Offset, pre and post frames
-        ti = 3 # time interval pre and post frames onset/offset (in seconds)
+        ti = 2 # time interval pre and post frames onset/offset (in seconds)
         f = np.array([round(-fps)*ti, 0, round(fps)*ti])        
         
         # ---------------------------------------------------------------------
@@ -207,7 +207,7 @@ def check_frames_likelihood(video_list, coord_list, conf_threshold, n_bp, savepa
 
         
         cap.release()
-        plt.savefig(savepath + fname + '_Frame_OnOff', format=plt_format)
+        plt.savefig(savepath + fname + '_Frame_OnOff.' + plt_format, format=plt_format)
         plt.close(figg)
         
         # ---------------------------------------------------------------------
@@ -226,13 +226,28 @@ def check_frames_likelihood(video_list, coord_list, conf_threshold, n_bp, savepa
         # ---------------------------------------------------------------------
         # Plot and write info of body parts likelihood per frames
         # ---------------------------------------------------------------------
-        fig, ax = plt.subplots(nrows=3, ncols=6, figsize=(11, 7),
-                                         gridspec_kw={'width_ratios': [2, 1, 2, 1, 2, 1],
-                                                      'height_ratios': [1, 1, 1], 'wspace': 0.2,'hspace': 0.6})
-                           
-        piecolors = ['#FA8072' , '#2D82B5']
-    
-        for j in range(0,len(bp_list)):  
+        rows, cols = 3, 6
+        max_per_fig = rows*cols  # subplots per figure                      
+        bodies_per_fig = max_per_fig // 2
+        piecolors = ['#FA8072' , '#2D82B5'] # blue and pink
+        
+        for j, bp in enumerate(bp_list):
+            if j % bodies_per_fig == 0:
+                if j != 0:
+                    plt.tight_layout()
+                    plt.savefig(f"{savepath}{fname}_BPLikelihood_fig{j // bodies_per_fig}.{plt_format}",
+                                format=plt_format)
+                    plt.close()
+                    
+                fig, axs = plt.subplots(rows, cols, figsize=(11, 7),
+                                    gridspec_kw={'width_ratios': [2, 1, 2, 1, 2, 1],
+                                                 'height_ratios': [1, 1, 1],
+                                                 'wspace': 0.2, 'hspace': 0.6})
+                axs = axs.flatten()       
+            
+            idx = (j % bodies_per_fig) * 2
+            ax_line = axs[idx]
+            ax_pie = axs[idx + 1]
             
             # calculate the proportion of good/bad frames using confidence likelihood
             label_likelihood = df_crop.xs((bp_list[j], 'likelihood'),
@@ -245,26 +260,28 @@ def check_frames_likelihood(video_list, coord_list, conf_threshold, n_bp, savepa
             video_info.loc[i,bp_list[j] + '_lowconf_nframes'] = low_total
             video_info.loc[i,bp_list[j] + '_lowconf_percent'] = (low_total/frame_total) * 100
             
-            # plot  
-            ax = plt.subplot(3,6,(j+1)+(j*1))        
-            plt.plot(label_likelihood, color = 'gray')
-            ax.axhline(conf_threshold, linestyle='--', color='r')
-            ax.set_title(bp_list[j])
+            # line plot  
+            ax_line.plot(label_likelihood, color='gray')
+            ax_line.axhline(conf_threshold, linestyle='--', color='r')
+            ax_line.set_title(bp)
             
-            if (j == 0) | (j == 3) | (j == 6):
-                ax.set_ylabel("Likelihood")
-                
-            if j>5:      
-                ax.set_xlabel("Frame idx")
-                
-            plt.subplot(3,6,(j+2)+(j*1)) 
-            plt.pie([low_total, frame_total-low_total], autopct='%1.1f%%', colors = piecolors)
-           
-            if j==2:
-                plt.legend(['Low likelihood','High likelihood' ], fontsize=8,
-                           bbox_to_anchor=(-0.5, 2), loc='upper left', borderaxespad=0.)
-                          
-        plt.savefig(savepath + fname + '_BPLikelihood', format=plt_format)
+            if j % bodies_per_fig in [0, 3, 6]:
+                ax_line.set_ylabel("Likelihood")
+            if j % bodies_per_fig >= 6:
+                ax_line.set_xlabel("Frame idx")
+            
+            # pie plot ax_line.axhline(conf_threshold, linestyle='--', color='r')   
+            ax_pie.pie([low_total, frame_total - low_total],
+                   autopct='%1.1f%%', colors=piecolors)  
+            
+            if j in [2, 11, 20]:
+                ax_pie.legend(['Low likelihood','High likelihood' ],
+                           fontsize=8, bbox_to_anchor=(-0.5, 2),
+                           loc='upper left', borderaxespad=0.)
+        
+        plt.tight_layout()
+        plt.savefig(f"{savepath}{fname}_BPLikelihood_fig{(len(bp_list) - 1) // bodies_per_fig + 1}.{plt_format}",
+                    format=plt_format)
         plt.close(fig)
         
         del df, df_crop
@@ -317,17 +334,14 @@ def fix_frames_likelihood(video_list, coord_list, video_info, conf_threshold, bp
         # Load initial inputs
         df = pd.read_hdf(coord_list[i])
         vname = video_list[i]
+        last_slash = vname.rfind('/')
+        fname = vname[last_slash+1:-4]
         t_onset = video_info['Frame_on'][i+id_on]
         t_offset = video_info['Frame_off'][i+id_on]
         n_frames = df.shape[0]
         n_coords = len(df.columns.get_level_values('coords').unique())
         n_bodyparts = len(bp_list)
-        
-        if len(video_list[i]) == 65:
-            fname = video_list[i][-18:-4]
-        else:
-            fname = video_list[i][-22:-4]
-        
+
         # Crop the data to get only the desired body parts
         df.columns = df.columns.droplevel('scorer')
         coords_name = df.columns.get_level_values('coords').unique().tolist()
@@ -384,7 +398,10 @@ def fix_frames_likelihood(video_list, coord_list, video_info, conf_threshold, bp
         # ---------------------------------------------------------------------
         # Manual correction
         # ---------------------------------------------------------------------
-        new_coords, corrected_frames = define_bodyparts(body_part_matrix, n_bodyparts, sequences, vname, frame_jump)
+        if sequences.size == 0:
+            continue
+        else:
+            new_coords, corrected_frames = define_bodyparts(body_part_matrix, n_bodyparts, sequences, vname, frame_jump)
         
         # ---------------------------------------------------------------------
         # Correct old coords with manually defined coords
@@ -510,11 +527,9 @@ def define_hole_position(video_list, coord_list, video_info, nholes, n_bp, savep
         colors = ['red']*nholes
         colors[0] = 'green'        
                   
-        # FileID
-        if len(video_info['Filename'][i]) == 65:
-            hole_coords.loc[i,'FileID'] = video_info['Filename'][i][-18:-4]
-        else:
-            hole_coords.loc[i,'FileID'] = video_info['Filename'][i][-22:-4]
+        # FileID       
+        last_slash = video_info['Filename'][i].rfind('/')
+        hole_coords.loc[i,'FileID'] = video_info['Filename'][i][last_slash+1:-4]
         
         # Get frame object            
         cap = cv2.VideoCapture(video_list[i])        
@@ -550,7 +565,7 @@ def define_hole_position(video_list, coord_list, video_info, nholes, n_bp, savep
         ax.imshow(frame_img)
         ax.set_title('Holes positions')
         ax.scatter(hcoords[:, 0], hcoords[:, 1], color=colors, s=40)
-        plt.savefig(savepath + hole_coords.iloc[i,0] + '_HolePosition', format='png')
+        plt.savefig(savepath + hole_coords.iloc[i,0] + '_HolePosition.png', format='png')
         plt.close(fig)
         
         print(i)
