@@ -27,7 +27,7 @@ Date:
 import cv2
 import ffmpeg
 
-def extract_frame_f_video(video_filename, video_frame=None, fps=30):
+def extract_frame_f_video(video_filename, video_frame=None):
     """
     Extract a single RGB frame from a video file.
 
@@ -52,6 +52,7 @@ def extract_frame_f_video(video_filename, video_frame=None, fps=30):
         The extracted video frame converted to RGB format as a NumPy array.
     """
     vidcap = cv2.VideoCapture(video_filename)  # Video capture
+    fps = round(vidcap.get(cv2.CAP_PROP_FPS))
     ret = False
     
     # GET ONLY THE FIRST FRAME CASE THE VIDEO FRAME HAS NOT BEEN SELECTED
