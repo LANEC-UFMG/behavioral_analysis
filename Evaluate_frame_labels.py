@@ -459,7 +459,7 @@ def fix_frames_likelihood(video_list, coord_list, video_info, conf_threshold, bp
 # Function: define_hole_position
 # =============================================================================
 def define_hole_position(video_list, coord_list, video_info, nholes, n_bp, savepath,
-                         frame_idx, old_hole_coords=None, recheck_id=None, dv=0):
+                         old_hole_coords=None, recheck_id=None, dv=0):
     """
     Retrieve or manually define coordinates of fixed spatial references (e.g., escape holes).
 
