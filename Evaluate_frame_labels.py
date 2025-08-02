@@ -519,6 +519,8 @@ def define_hole_position(video_list, coord_list, video_info, nholes, n_bp, savep
     # -------------------------------------------------------------------------
     # Start loop through coord list
     # -------------------------------------------------------------------------
+    
+    frame_int = 60
     for i in iteration_vec:
         
         onset = video_info['Frame_on'][i]+frame_int
@@ -552,7 +554,7 @@ def define_hole_position(video_list, coord_list, video_info, nholes, n_bp, savep
             cf = [col for col in dfcopy.columns if col[2] in colname] # List comprehension
             hc = dfcopy[cf[n_bp*2:]] # Holes x y columns
             
-            hole_coords.iloc[i,1:] = hc.iloc[onset,:]
+            hole_coords.iloc[i,1:] = hc.median(axis=0)
             hcoords = hole_coords.iloc[i,1:].values.reshape(-1, 2)                      
             
         else: # Manually define labels
