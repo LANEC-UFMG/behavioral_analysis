@@ -183,7 +183,7 @@ def define_bodyparts(body_part_matrix, n, sequence, video, fr_int):
         count2 = 0
 
         for j in range(len(frame_indices)):
-            frame_img = extract_frame_f_video(video, video_frame=frame_indices[j], fps=30)
+            frame_img = extract_frame_f_video(video, video_frame=frame_indices[j])
                         
             fig, ax = plt.subplots(1,1,figsize=(19.2,10.8))
             old_coords = body_part_matrix[frame_indices[j],:,0:2] # 3D to 2D array

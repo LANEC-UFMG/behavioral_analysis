@@ -21,6 +21,10 @@ Author
 Ikaro-Beraldo
 Docstring comments by Rafael Bessa
 
+Update Jul/25 (Rafael Bessa) - Remove fps entry argument from
+extract_frame_f_video() and retrieve it from the video object
+with get(cv2.CAP_PROP_FPS) inside the function
+
 Date:
 """
 
@@ -42,9 +46,6 @@ def extract_frame_f_video(video_filename, video_frame=None):
     video_frame : int, optional
         Index of the frame to extract. If None, the first frame is returned.
         Default is None.
-    fps : float, optional
-        Frame rate (frames per second) of the video. Required for calculating 
-        time position when a specific frame is requested. Default is 30.
 
     Returns
     -------
