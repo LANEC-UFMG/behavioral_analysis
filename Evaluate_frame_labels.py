@@ -167,8 +167,8 @@ def check_frames_likelihood(video_list, coord_list, conf_threshold, n_bp, savepa
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
         # Get frame onset and offset
-        t_onset, t_offset = get_trial_onset_offset(df, conf_threshold, fps=round(fps), max_duration_trial=3, n_bp=n_bp)
-        #t_onset, t_offset = 0 , len(df)-1
+        #t_onset, t_offset = get_trial_onset_offset(df, conf_threshold, fps=round(fps), max_duration_trial=3, n_bp=n_bp)
+        t_onset, t_offset = 0 , len(df)-1
         #t_onset = t_on[i]
         #t_offset = t_off[i]
                 
@@ -327,7 +327,7 @@ def fix_frames_likelihood(video_list, coord_list, video_info, conf_threshold, bp
     None
         Saves corrected coordinates and metadata as .npy files.
     """
-    
+    aswr = ''
     id_on = 0 if id_on is None else id_on 
     for i in range(len(coord_list)):
         print(f"Video {i}")
@@ -381,6 +381,9 @@ def fix_frames_likelihood(video_list, coord_list, video_info, conf_threshold, bp
         else:
             sequence_off = np.append(sequence_off,exc_frames[edge[-1]+1])
                     
+        sequence_on = sequence_on.reshape(len(sequence_on))
+        sequence_off = sequence_off.reshape(len(sequence_off))
+        
         sequences_all = np.stack((sequence_on,sequence_off),axis=1).reshape(len(sequence_on),2)
         
         # Correct onset/offset cases
@@ -398,9 +401,60 @@ def fix_frames_likelihood(video_list, coord_list, video_info, conf_threshold, bp
         # ---------------------------------------------------------------------
         # Manual correction
         # ---------------------------------------------------------------------
-        if sequences.size == 0:
+        if sequences.size == 0: # No sequence to correct
+
+            # Make nan all coords with low conf
+            body_part_matrix[exc_frames,:,0:2] = np.nan
+            new_coords = np.zeros(0)
+            corrected_frames = np.zeros(0)
+
+            # Interpolate 
+            acc_frames = np.sort(np.append(acc_frames,corrected_frames))
+            acc_frames = acc_frames.astype(int)
+            frame_seq = np.arange(np.shape(body_part_matrix)[0])
+            bp_matrix_interp = body_part_matrix.copy()
+            
+            for j in range(n_bodyparts):
+                for jj in range(2):
+                    # Extract temporal series for each body part coordinate (x and y)
+                    coordinate = body_part_matrix[:, j, jj]
+        
+                    if np.sum(acc_frames) < 2:
+                        # Not enough points to interpolate
+                        continue
+        
+                    # Interpolator
+                    interp_func = interp1d(frame_seq[acc_frames], 
+                        coordinate[acc_frames], kind='linear', bounds_error=False,
+                        fill_value="extrapolate"  # or use None to leave as nan out of limits
+                    )
+        
+                    # Interpolate all frames
+                    bp_matrix_interp[:, j, jj] = interp_func(frame_seq)
+             
+            # Return interpolated coords matrix and respective info
+            kdict = ['bodyparts_list','likelihood_thre','sequence_thre','frame_jump',
+                     'excluded_frames','frame_sequences_all','frame_sequences_corrected','corrected_frames']
+            vdict = [bp_list, conf_threshold, seq_thre, frame_jump,
+                     exc_frames, sequences_all, sequences, corrected_frames]
+            correction_data = dict(zip(kdict,vdict)) # Dictionary type
+            
+            # Recreate pd.DataFrame
+            multi_cols = pd.MultiIndex.from_product(
+                [["DLC_resnet50"], bp_list, ["x", "y","likelihood"]],
+                names=["scorer", "bodyparts", "coords"]
+            )
+            
+            dsize = np.shape(bp_matrix_interp)
+            data = np.reshape(bp_matrix_interp,(dsize[0],dsize[1]*dsize[2]))
+            processed_data = pd.DataFrame(data, columns=multi_cols)
+            
+            np.save(savepath+fname+'_processedInfo.npy', correction_data, allow_pickle=True)
+            # np.save(savepath+fname+'_processedCoords.npy', bp_matrix_interp)    
+            processed_data.to_hdf(savepath+fname+'_processedCoords.h5', format='table')
             continue
-        else:
+            
+        else: # Manual correction of sequences
             new_coords, corrected_frames = define_bodyparts(body_part_matrix, n_bodyparts, sequences, vname, frame_jump)
         
         # ---------------------------------------------------------------------
@@ -421,14 +475,16 @@ def fix_frames_likelihood(video_list, coord_list, video_info, conf_threshold, bp
             for jj in range(2):
                 # Extract temporal series for each body part coordinate (x and y)
                 coordinate = body_part_matrix[:, j, jj]
+                
+                acc_frames_corr = ~np.isnan(body_part_matrix[:, j, jj])
     
-                if np.sum(acc_frames) < 2:
+                if np.sum(acc_frames_corr) < 2:
                     # Not enough points to interpolate
                     continue
     
                 # Interpolator
-                interp_func = interp1d(frame_seq[acc_frames], 
-                    coordinate[acc_frames], kind='linear', bounds_error=False,
+                interp_func = interp1d(frame_seq[acc_frames_corr], 
+                    coordinate[acc_frames_corr], kind='linear', bounds_error=False,
                     fill_value="extrapolate"  # or use None to leave as nan out of limits
                 )
     
@@ -442,13 +498,25 @@ def fix_frames_likelihood(video_list, coord_list, video_info, conf_threshold, bp
                  exc_frames, sequences_all, sequences, corrected_frames]
         correction_data = dict(zip(kdict,vdict)) # Dictionary type
         
+        # Recreate pd.DataFrame
+        multi_cols = pd.MultiIndex.from_product(
+            [["DLC_resnet50"], bp_list, ["x", "y","likelihood"]],
+            names=["scorer", "bodyparts", "coords"]
+        )
+        
+        dsize = np.shape(bp_matrix_interp)
+        data = np.reshape(bp_matrix_interp,(dsize[0],dsize[1]*dsize[2]))
+        processed_data = pd.DataFrame(data, columns=multi_cols)
+        
         np.save(savepath+fname+'_processedInfo.npy', correction_data, allow_pickle=True)
-        np.save(savepath+fname+'_processedCoords.npy', bp_matrix_interp)
+        # np.save(savepath+fname+'_processedCoords.npy', bp_matrix_interp)
+        processed_data.to_hdf(savepath+fname+'_processedCoords.h5', format='table')
+        
         
         # Break from loop (optional)
         if not i==(len(coord_list)-1):
             aswr = input("Press Enter to continue or 'q' to exit: ")
-    
+
         if aswr.lower() == 'q':
             print(f"You finished file {fname} (iteration {i})")
             break
@@ -565,9 +633,130 @@ def define_hole_position(video_list, coord_list, video_info, nholes, n_bp, savep
         fig,ax = plt.subplots()
         ax.cla() # clear things for fresh plot
         ax.imshow(frame_img)
-        ax.set_title('Holes positions')
+        ax.set_title("Holes' positions")
         ax.scatter(hcoords[:, 0], hcoords[:, 1], color=colors, s=40)
-        plt.savefig(savepath + hole_coords.iloc[i,0] + '_HolePosition.png', format='png')
+        plt.savefig(savepath + hole_coords.iloc[i,0] + '_HolesPosition.png', format='png')
+        plt.close(fig)
+        
+        print(i)
+ 
+    return hole_coords
+
+# =============================================================================
+# Function: define_roi_position
+# =============================================================================
+def define_roi_position(video_list, coord_list, video_info, nroi, n_bp, savepath,
+                         old_roi_coords=None, recheck_id=None, dv=0):
+    """
+    Retrieve or manually define coordinates of fixed spatial references (e.g., escape holes).
+
+    Allows user to accept DeepLabCut-detected positions or manually click each hole on a frame.
+    Results are saved as images and stored in a summary table.
+    
+    Parameters
+    ----------
+    video_list : tuple of str
+        List of video file full paths.
+    coord_list : tuple of str
+        List of DLC output file (HDF5) full paths.
+    video_info : pandas.DataFrame
+        DataFrame containing onset frame indices and filenames.
+    nholes : int
+        Number of spatial zones (e.g., holes) to be labeled.
+    n_bp : int
+        Number of body parts used in tracking.
+    savepath : str
+        Output directory to save results.
+    frame_idx : int
+        Frame index to be selected
+    old_hole_coords : pandas.DataFrame, optional
+        Previous dataframe containing hole coordinates (default is None)
+    recheck_id : numpy.ndarray, optional
+        Vector containing the indexes to be reviewed. Indexes refer to old_hole_coords
+        dataframe (default is None)
+    dv : int, optional
+        If 0, uses DLC coordinates; if 1, collects them manually (default is 0).
+    Returns
+    -------
+    hole_coords : pandas.DataFrame
+        DataFrame containing hole coordinates for each video.
+    """
+    
+    # -------------------------------------------------------------------------
+    # Check optional parameters
+    # -------------------------------------------------------------------------
+    if old_roi_coords is None:
+          
+        # ---------------------------------------------------------------------
+        # Create output dataframe
+        # ---------------------------------------------------------------------        
+        cols = ["FileID"]
+        hname = [f"V{i:01d}_{sufixo}" for i in range(1,5) for sufixo in ['x', 'y']]
+        r1name = [f"R1_{i:01d}_{sufixo}" for i in range(1,5) for sufixo in ['x', 'y']]
+        r2name =  [f"R2_{i:01d}_{sufixo}" for i in range(1,5) for sufixo in ['x', 'y']]
+        cols.extend(hname+r1name+r2name)     
+        roi_coords = pd.DataFrame(data=None,columns = cols, index = range(len(video_info)))        
+        iteration_vec = range(len(video_list))
+
+    else:
+        # ---------------------------------------------------------------------
+        # Use optional variables
+        # ---------------------------------------------------------------------       
+        roi_coords = old_roi_coords
+        iteration_vec = recheck_id-1
+                        
+    # -------------------------------------------------------------------------
+    # Start loop through coord list
+    # -------------------------------------------------------------------------
+    
+    frame_int = 120
+    for i in iteration_vec:
+        
+        onset = video_info['Frame_on'][i]+frame_int
+        
+        # color vector
+        # colors = ['red']*nroi
+        # colors[0] = 'green'        
+                  
+        # FileID       
+        last_slash = video_info['Filename'][i].rfind('/')
+        roi_coords.loc[i,'FileID'] = video_info['Filename'][i][last_slash+1:-4]
+        
+        # Get frame object            
+        cap = cv2.VideoCapture(video_list[i])        
+        cap.set(cv2.CAP_PROP_POS_FRAMES, onset)
+        ret,frame = cap.read()
+        if ret:
+            frame_img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        else:                                      
+            print(f"Aviso: Não foi possível ler o frame {onset} do vídeo {hole_coords.iloc[i,0]}")
+        
+        cap.release()
+        
+        # ---------------------------------------------------------------------
+        # Get DLC holes coords
+        # ---------------------------------------------------------------------
+        if dv==0: # Accept DLC label
+            df = pd.read_hdf(coord_list[i]) # Load df coords
+            dfcopy = df.copy()
+            colname = dfcopy.columns.get_level_values('coords').unique()[0:2] # Sub-level coords' columns names ('x' and 'y')
+            cf = [col for col in dfcopy.columns if col[2] in colname] # List comprehension
+            rc = dfcopy[cf[n_bp*2:]] # Holes x y columns
+            
+            roi_coords.iloc[i,1:] = rc.median(axis=0)
+            rcoords = role_coords.iloc[i,1:].values.reshape(-1, 2)                      
+            
+        else: # Manually define labels
+            rcoords = define_roi(frame_img, nroi)
+            roi_coords.iloc[i,1:] = rcoords.reshape(np.size(rcoords))
+        
+        # Plot frame and holes
+        fig,ax = plt.subplots()
+        ax.cla() # clear things for fresh plot
+        ax.imshow(frame_img)
+        ax.set_title("ROI positions")
+        ax.scatter(rcoords[:, 0], rcoords[:, 1], color=colors, s=40)
+        plt.savefig(savepath + hole_coords.iloc[i,0] + '_ROIPosition.png', format='png')
         plt.close(fig)
         
         print(i)
